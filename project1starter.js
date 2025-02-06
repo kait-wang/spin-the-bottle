@@ -71,6 +71,7 @@ async function loadOBJFiles() {
     startRendering()
 }
 
+// woahh
 function startRendering() {
     // Initialize GPU's vertex and fragment shaders programs
     if (!initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)) {
