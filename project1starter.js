@@ -2,8 +2,9 @@
 
 const VSHADER_SOURCE = `
     attribute vec3 a_Position;
-    uniform mat4 u_Model;
-    uniform mat4 u_World;
+    uniform mat4 u_Model; 
+    uniform mat4 u_World; 
+    uniform mat4 u_Camera; 
     attribute vec3 a_Color;
     varying vec3 v_Color;
     void main() {
@@ -34,6 +35,7 @@ var g_worldMatrix
 
 // Mesh definitions
 var g_bottleMesh
+var g_catMesh
 var g_gridMesh
 
 // We're using triangles, so our vertices each have 3 elements
@@ -63,15 +65,18 @@ function main() {
  */
 async function loadOBJFiles() {
     // open our OBJ file(s)
-    data = await fetch('./resources/wine2.obj').then(response => response.text()).then((x) => x)
+    bottle_data = await fetch('./resources/wine2.obj').then(response => response.text()).then((x) => x)
     g_bottleMesh = []
-    readObjFile(data, g_bottleMesh)
+    readObjFile(bottle_data, g_bottleMesh)
+
+    cat_data = await fetch('./resources/cat.obj').then(response => response.text()).then((x) => x)
+    g_catMesh = []
+    readObjFile(cat_data, g_catMesh)
 
     // Wait to load our models before starting to render
     startRendering()
 }
 
-// woahh
 function startRendering() {
     // Initialize GPU's vertex and fragment shaders programs
     if (!initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)) {
@@ -82,8 +87,11 @@ function startRendering() {
     // initialize the VBO
     var gridInfo = buildGridAttributes(1, 1, [0.0, 1.0, 0.0])
     g_gridMesh = gridInfo[0]
+
     var bottleColors = buildColorAttributes(g_bottleMesh.length / 3)
-    var data = g_bottleMesh.concat(gridInfo[0]).concat(bottleColors).concat(gridInfo[1])
+    var catColors = buildColorAttributes(g_catMesh.length / 3)
+    var data = g_bottleMesh.concat(g_catMesh).concat(gridInfo[0]).concat(bottleColors).concat(catColors).concat(gridInfo[1])
+    
     if (!initVBO(new Float32Array(data))) {
         return
     }
@@ -92,7 +100,7 @@ function startRendering() {
     if (!setupVec3('a_Position', 0, 0)) {
         return
     }
-    if (!setupVec3('a_Color', 0, (g_bottleMesh.length + gridInfo[0].length) * FLOAT_SIZE)) {
+    if (!setupVec3('a_Color', 0, (g_bottleMesh.length + g_catMesh.length + gridInfo[0].length) * FLOAT_SIZE)) {
         return -1
     }
 
@@ -118,7 +126,7 @@ function startRendering() {
 }
 
 // extra constants for cleanliness
-var ROTATION_SPEED = .05
+var ROTATION_SPEED = .02
 
 // function to apply all the logic for a single frame tick
 function tick() {
@@ -150,7 +158,7 @@ function draw() {
     gl.clear(gl.COLOR_BUFFER_BIT)
 
     // draw our one model (the teapot)
-    gl.drawArrays(gl.TRIANGLES, 0, g_bottleMesh.length / 3)
+    gl.drawArrays(gl.TRIANGLES, 0, (g_bottleMesh.length + g_catMesh.length) / 3)
 
     // the grid has a constant identity matrix for model and world
     // world includes our Y offset
@@ -158,7 +166,7 @@ function draw() {
     gl.uniformMatrix4fv(g_u_world_ref, false, new Matrix4().translate(0, GRID_Y_OFFSET, 0).elements)
 
     // draw the grid
-    gl.drawArrays(gl.LINES, g_bottleMesh.length / 3, g_gridMesh.length / 3)
+    gl.drawArrays(gl.LINES, (g_bottleMesh.length + g_catMesh.length) / 3, g_gridMesh.length / 3)
 }
 
 // Helper to construct colors
@@ -172,7 +180,6 @@ function buildColorAttributes(vertex_count) {
             colors.push(shade, shade, 1.0)
         }
     }
-
     return colors
 }
 
