@@ -30,7 +30,10 @@ var g_u_model_ref
 var g_u_world_ref
 
 // usual model/world matrices
-var g_modelMatrix
+var g_bottle_modelMatrix
+var g_cat1_modelMatrix
+var g_cat2_modelMatrix
+var g_cat3_modelMatrix
 var g_worldMatrix
 
 // Mesh definitions
@@ -92,11 +95,12 @@ function startRendering() {
     var catColors = buildColorAttributes(g_catMesh.length / 3)
     var data = g_bottleMesh.concat(g_catMesh).concat(gridInfo[0]).concat(bottleColors).concat(catColors).concat(gridInfo[1])
     
+    // load all vertex data into VBO ONCE
     if (!initVBO(new Float32Array(data))) {
         return
     }
 
-    // Send our vertex data to the GPU
+    // Send our vertex data to the GPU, map vertex data to attributes in VERTEX SHADER
     if (!setupVec3('a_Position', 0, 0)) {
         return
     }
@@ -108,9 +112,31 @@ function startRendering() {
     g_u_model_ref = gl.getUniformLocation(gl.program, 'u_Model')
     g_u_world_ref = gl.getUniformLocation(gl.program, 'u_World')
 
+    // ** model matrices ** --> transformation matrices that apply changes to the mesh vertices 
+
     // Setup our model by scaling
-    g_modelMatrix = new Matrix4()
-    g_modelMatrix = g_modelMatrix.setScale(0.02, 0.02, 0.02)
+    g_bottle_modelMatrix = new Matrix4() //starts as an identity matrix 
+    g_bottle_modelMatrix = g_bottle_modelMatrix.setScale(0.015, 0.015, 0.015)
+    g_bottle_modelMatrix.translate(0, -10, -35)
+
+    // I want each cat to be its own model matrix
+    g_cat1_modelMatrix = new Matrix4()
+    g_cat1_modelMatrix = g_cat1_modelMatrix.setScale(0.015, 0.015, 0.015)
+
+    g_cat2_modelMatrix = new Matrix4()
+    g_cat2_modelMatrix = g_cat2_modelMatrix.setScale(0.015, 0.015, 0.015)
+    
+    g_cat3_modelMatrix = new Matrix4()
+    g_cat3_modelMatrix = g_cat3_modelMatrix.setScale(0.015, 0.015, 0.015)
+
+    // circle the cats around the spinning bottle 
+    g_cat1_modelMatrix.translate(0, -10, -35)  
+    g_cat2_modelMatrix.translate(-35, -10, 20) 
+    g_cat3_modelMatrix.translate(35, -10, 20)
+
+    g_cat1_modelMatrix.rotate(0, 0, 1, 0)
+    g_cat2_modelMatrix.rotate(90, 0, 1, 0) 
+    g_cat3_modelMatrix.rotate(-90, 0, 1, 0) 
 
     // Reposition our mesh (in this case as an identity operation)
     g_worldMatrix = new Matrix4()
@@ -126,7 +152,7 @@ function startRendering() {
 }
 
 // extra constants for cleanliness
-var ROTATION_SPEED = .02
+var ROTATION_SPEED = .05
 
 // function to apply all the logic for a single frame tick
 function tick() {
@@ -140,7 +166,7 @@ function tick() {
 
     // rotate the arm constantly around the given axis (of the model)
     angle = ROTATION_SPEED * deltaTime
-    g_modelMatrix.concat(new Matrix4().setRotate(angle, 0, 1, 0))
+    g_bottle_modelMatrix.concat(new Matrix4().setRotate(angle, 0, 1, 0))
 
     draw()
 
@@ -149,16 +175,32 @@ function tick() {
 
 // draw to the screen on the next frame
 function draw() {
-    // Update with our global transformation matrices
-    gl.uniformMatrix4fv(g_u_model_ref, false, g_modelMatrix.elements)
-    gl.uniformMatrix4fv(g_u_world_ref, false, g_worldMatrix.elements)
 
     // Clear the canvas with a black background
     gl.clearColor(0.0, 0.0, 0.0, 1.0)
     gl.clear(gl.COLOR_BUFFER_BIT)
 
-    // draw our one model (the teapot)
-    gl.drawArrays(gl.TRIANGLES, 0, (g_bottleMesh.length + g_catMesh.length) / 3)
+    // Update with our global transformation matrices
+    // send uniform vars (with the refs) to the VSHADER to transform matrices
+    gl.uniformMatrix4fv(g_u_model_ref, false, g_bottle_modelMatrix.elements)
+    gl.uniformMatrix4fv(g_u_world_ref, false, g_worldMatrix.elements)
+    // draw bottle 
+    gl.drawArrays(gl.TRIANGLES, 0, (g_bottleMesh.length) / 3) 
+
+
+
+    // cat drawing party 
+    gl.uniformMatrix4fv(g_u_model_ref, false, g_cat1_modelMatrix.elements)
+    gl.uniformMatrix4fv(g_u_world_ref, false, g_worldMatrix.elements)
+    gl.drawArrays(gl.TRIANGLES, (g_bottleMesh.length) / 3, (g_catMesh.length) / 3)
+
+    gl.uniformMatrix4fv(g_u_model_ref, false, g_cat2_modelMatrix.elements)
+    gl.uniformMatrix4fv(g_u_world_ref, false, g_worldMatrix.elements)
+    gl.drawArrays(gl.TRIANGLES, (g_bottleMesh.length) / 3, (g_catMesh.length) / 3)
+
+    gl.uniformMatrix4fv(g_u_model_ref, false, g_cat3_modelMatrix.elements)
+    gl.uniformMatrix4fv(g_u_world_ref, false, g_worldMatrix.elements)
+    gl.drawArrays(gl.TRIANGLES, (g_bottleMesh.length) / 3, (g_catMesh.length) / 3)
 
     // the grid has a constant identity matrix for model and world
     // world includes our Y offset
