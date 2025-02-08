@@ -23,36 +23,96 @@
         Please use a browser that supports "canvas"
     </canvas>    
     
-    <!-- camera controls-->
-    <div>
-        <input type="range" id="sliderNear" min="-5" max="3" step=".01" />
-        <label id="near" for="sliderNear"></label>
+    <div id="user interaction">
+        <!-- Display current camera type -->
+        <p id="currentCamera">Current Camera: Orthographic</p>
+   
+         <!-- switch camera button -->
+        <button id="cameraSwitch" onclick="switchCamera()">Switch Camera</button>
+
+        <!-- stop the bottle button -->
+        <button id="stopBottle" onclick="stopBottle()">Stop Bottle</button>
+
+        <!-- translate camera -->
+        <div>
+            <input type="range" id="sliderX" min="-1" max="1" step=".01" />
+            <label id="cameraX" for="sliderX"></label>
+        </div>
+    </div>
+    
+
+     <!-- CVV controls-->
+     <div>
+        <p id="controls-nf">Near and Far planes</p>
+        <!-- First Column: Near and Far -->
+        <div>
+            <input type="range" id="sliderNear" min="0" max="2.06" step=".01" />
+            <label id="near" for="sliderNear">Near</label>
+        </div>
+        <div>
+            <input type="range" id="sliderFar" min="0" max="5.5" step=".01" />
+            <label id="far" for="sliderFar">Far</label>
+        </div>
+     </div>
+     <div>
+        <p id="controls-ortho">Orthographic Projection</p>
+        <!-- Second Column: Orthographic Controls (Left, Right, Bottom, Top) -->
+        <div>
+            <input type="range" id="sliderLeft" min="-5" max="3" step=".01"/>
+            <label id="left" for="sliderLeft">Left</label>
+        </div>
+        <div>
+            <input type="range" id="sliderRight" min="-3" max="5" step=".01" />
+            <label id="right" for="sliderRight">Right</label>
+        </div>
+        <div>
+            <input type="range" id="sliderBottom" min="-5" max="3" step=".01" />
+            <label id="bottom" for="sliderBottom">Bottom</label>
+        </div>
+        <div>
+            <input type="range" id="sliderTop" min="-3" max="5" step=".01" />
+            <label id="top" for="sliderTop">Top</label>
+        </div>
     </div>
     <div>
-        <input type="range" id="sliderFar" min="-2" max="6" step=".01" />
-        <label id="far" for="sliderFar"></label>
-    </div>
-    <div>
-        <input type="range" id="sliderLeft" min="-5" max="3" step=".01" />
-        <label id="left" for="sliderLeft"></label>
-    </div>
-    <div>
-        <input type="range" id="sliderRight" min="-3" max="5" step=".01" />
-        <label id="right" for="sliderRight"></label>
-    </div>
-    <div>
-        <input type="range" id="sliderBottom" min="-5" max="3" step=".01" />
-        <label id="bottom" for="sliderBottom"></label>
-    </div>
-    <div>
-        <input type="range" id="sliderTop" min="-3" max="5" step=".01" />
-        <label id="top" for="sliderTop"></label>
+        <p id="controls-pers">Perspective Projection</p>
+        <!-- Third Column: Perspective Controls (FOVY, Aspect) -->
+        <div>
+            <input type="range" id="sliderFOVY" min="1" max="200" step=".01" value="90" />
+            <label id="fovy" for="sliderFOVY">FOVY</label>
+        </div>
+        <div>
+            <input type="range" id="sliderAspect" min=".5" max="2" step=".01" value="1" />
+            <label id="aspect" for="sliderAspect">Aspect</label>
+        </div>
     </div>
 
-    <div>
-        <input type="range" id="sliderX" min="-1" max="1" step=".01" />
-        <label id="cameraX" for="sliderX"></label>
-    </div>
+
+    <script>
+        // Update the label "Current Camera: " with correct camera 
+        let currentCameraType = 'Orthographic';
+        function switchCamera() { // when you click button
+            if (currentCameraType === 'Orthographic') {
+                currentCameraType = 'Perspective';
+            } else {
+                currentCameraType = 'Orthographic';
+            }
+            document.getElementById('currentCamera').textContent = `Current Camera: ${currentCameraType}`;
+        }
+    </script>
+
+    <script>
+        // Switch between "Stop Bottle" with "Spin Bottle" 
+        let currentAction = 'Stop';
+        function stopBottle() { // when you click button
+            if (currentAction === 'Stop') {
+                currentAction = 'Spin';
+            } else {
+                currentAction = 'Stop';
+            }
+            document.getElementById('stopBottle').textContent = `${currentAction} Bottle`;
+        }
+    </script>
 
 </body>
 

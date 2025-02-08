@@ -41,6 +41,12 @@ var g_worldMatrix
 var g_cameraMatrix
 var projection_matrix
 
+// camera types
+var camera_type=0 // default is orthographic 
+
+// bottle spinning, spins by default
+var bottle_spin=true
+
 // ortho camera projection values
 var g_near
 var g_far
@@ -65,6 +71,17 @@ const TRIANGLE_SIZE = 3
 const FLOAT_SIZE = 4
 
 function main() {
+    // perspective projection sliders 
+    slider_input = document.getElementById('sliderFOVY')
+    slider_input.addEventListener('input', (event) => {
+        updateFOVY(event.target.value)
+    })
+
+    slider_input = document.getElementById('sliderAspect')
+    slider_input.addEventListener('input', (event) => {
+        updateAspect(event.target.value)
+    })
+
     // orthographic projection sliders 
     slider_input = document.getElementById('sliderNear')
     slider_input.addEventListener('input', (event) => {
@@ -102,6 +119,17 @@ function main() {
         updateCameraX(event.target.value)
     })
 
+    // switching camera 
+    button_switch = document.getElementById('cameraSwitch')
+    button_switch.addEventListener('click', function() {
+        camera_type = 1-camera_type
+    })
+
+    // stop spinning bottle  
+    bottle_stop = document.getElementById('stopBottle')
+    bottle_stop.addEventListener('click', function() {
+        bottle_spin = !bottle_spin
+    })
     g_canvas = document.getElementById('canvas')
 
     // Get the rendering context for WebGL
@@ -176,23 +204,23 @@ function startRendering() {
 
     // Setup our model by scaling
     g_bottle_modelMatrix = new Matrix4() //starts as an identity matrix 
-    g_bottle_modelMatrix = g_bottle_modelMatrix.setScale(0.015, 0.015, 0.015)
-    g_bottle_modelMatrix.translate(0, -10, -35)
+    g_bottle_modelMatrix = g_bottle_modelMatrix.setScale(0.012, 0.012, 0.012)
+    g_bottle_modelMatrix.translate(0, -10, -110)
 
     // I want each cat to be its own model matrix
     g_cat1_modelMatrix = new Matrix4()
-    g_cat1_modelMatrix = g_cat1_modelMatrix.setScale(0.015, 0.015, 0.015)
+    g_cat1_modelMatrix = g_cat1_modelMatrix.setScale(0.012, 0.012, 0.012)
 
     g_cat2_modelMatrix = new Matrix4()
-    g_cat2_modelMatrix = g_cat2_modelMatrix.setScale(0.015, 0.015, 0.015)
+    g_cat2_modelMatrix = g_cat2_modelMatrix.setScale(0.012, 0.012, 0.012)
     
     g_cat3_modelMatrix = new Matrix4()
-    g_cat3_modelMatrix = g_cat3_modelMatrix.setScale(0.015, 0.015, 0.015)
+    g_cat3_modelMatrix = g_cat3_modelMatrix.setScale(0.012, 0.012, 0.012)
 
     // circle the cats around the spinning bottle 
-    g_cat1_modelMatrix.translate(0, -10, -35)  
-    g_cat2_modelMatrix.translate(-35, -10, 20) 
-    g_cat3_modelMatrix.translate(35, -10, 20)
+    g_cat1_modelMatrix.translate(0, -10, -140)  
+    g_cat2_modelMatrix.translate(-55, -10, -90) 
+    g_cat3_modelMatrix.translate(55, -10, -90)
 
     g_cat1_modelMatrix.rotate(0, 0, 1, 0)
     g_cat2_modelMatrix.rotate(90, 0, 1, 0) 
@@ -213,13 +241,18 @@ function startRendering() {
     // Setup for ticks
     g_lastFrameMS = Date.now()
 
-    //initialize the projection parameters 
-    updateNear(-1)
-    updateFar(2)
+    // initialize the perpective projection parameters 
+    updateFOVY(90)
+    updateAspect(1)
+
+    //initialize the orthographic projection parameters 
     updateLeft(-1)
     updateRight(1)
     updateBottom(-1)
     updateTop(1)
+
+    updateNear(1)
+    updateFar(4)
 
     // camera at origin
     updateCameraX(0)
@@ -228,7 +261,7 @@ function startRendering() {
 }
 
 // extra constants for cleanliness
-var ROTATION_SPEED = .05
+var ROTATION_SPEED = .15
 
 // function to apply all the logic for a single frame tick
 function tick() {
@@ -240,10 +273,12 @@ function tick() {
     deltaTime = current_time - g_lastFrameMS
     g_lastFrameMS = current_time
 
-    // rotate the arm constantly around the given axis (of the model)
-    angle = ROTATION_SPEED * deltaTime
-    g_bottle_modelMatrix.concat(new Matrix4().setRotate(angle, 0, 1, 0))
-
+    if (bottle_spin) {
+        // rotate the arm constantly around the given axis (of the model)
+        angle = ROTATION_SPEED * deltaTime
+        g_bottle_modelMatrix.concat(new Matrix4().setRotate(angle, 0, 1, 0))
+    }
+    
     draw()
 
     requestAnimationFrame(tick, g_canvas)
@@ -251,8 +286,13 @@ function tick() {
 
 // draw to the screen on the next frame
 function draw() {
-    // Orthographic projection matrix
-    projection_matrix = new Matrix4().setOrtho(g_left, g_right, g_bottom, g_top, g_near, g_far)
+
+    if (camera_type == 0) {
+        projection_matrix = new Matrix4().setOrtho(g_left, g_right, g_bottom, g_top, g_near, g_far)
+    }
+    else {
+        projection_matrix = new Matrix4().setPerspective(g_fovy, g_aspect, g_near, g_far)
+    }
     g_cameraMatrix = new Matrix4().translate(-g_camera_x, 0, 0)
 
     // Clear the canvas with a black background
@@ -317,7 +357,6 @@ function buildColorAttributes(vertex_count, isBottle=false, cat=1) {
     return colors
 }
 
-// adjusting projection values of ORTHOGRAPHIC CAMERA 
 
 function updateNear(amount) {
     label = document.getElementById('near')
@@ -331,6 +370,20 @@ function updateFar(amount) {
     g_far = Number(amount)
 }
 
+// adjust perspective camera
+function updateFOVY(amount) {
+    label = document.getElementById('fovy')
+    label.textContent = `FOVY: ${Number(amount).toFixed(2)}`
+    g_fovy = Number(amount)
+}
+
+function updateAspect(amount) {
+    label = document.getElementById('aspect')
+    label.textContent = `Aspect: ${Number(amount).toFixed(2)}`
+    g_aspect = Number(amount)
+}
+
+// adjust orthographic camera
 function updateLeft(amount) {
     label = document.getElementById('left')
     label.textContent = `Left: ${Number(amount).toFixed(2)}`
