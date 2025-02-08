@@ -5,10 +5,11 @@ const VSHADER_SOURCE = `
     uniform mat4 u_Model; 
     uniform mat4 u_World; 
     uniform mat4 u_Camera; 
+    uniform mat4 u_Projection; 
     attribute vec3 a_Color;
     varying vec3 v_Color;
     void main() {
-        gl_Position = u_World * u_Model * vec4(a_Position, 1.0);
+        gl_Position = u_Projection * u_Camera * u_World * u_Model * vec4(a_Position, 1.0);
         v_Color = a_Color;
     }
 `
@@ -28,6 +29,8 @@ var g_lastFrameMS
 // GLSL uniform references
 var g_u_model_ref
 var g_u_world_ref
+var g_u_camera_ref
+var g_u_projection_ref
 
 // usual model/world matrices
 var g_bottle_modelMatrix
@@ -35,10 +38,24 @@ var g_cat1_modelMatrix
 var g_cat2_modelMatrix
 var g_cat3_modelMatrix
 var g_worldMatrix
+var g_cameraMatrix
+var projection_matrix
+
+// ortho camera projection values
+var g_near
+var g_far
+var g_left
+var g_right
+var g_top
+var g_bottom
+
+var g_camera_x // slider translation 
 
 // Mesh definitions
 var g_bottleMesh
-var g_catMesh
+var g_cat1Mesh
+var g_cat2Mesh
+var g_cat3Mesh
 var g_gridMesh
 
 // We're using triangles, so our vertices each have 3 elements
@@ -48,6 +65,43 @@ const TRIANGLE_SIZE = 3
 const FLOAT_SIZE = 4
 
 function main() {
+    // orthographic projection sliders 
+    slider_input = document.getElementById('sliderNear')
+    slider_input.addEventListener('input', (event) => {
+        updateNear(event.target.value)
+    })
+
+    slider_input = document.getElementById('sliderFar')
+    slider_input.addEventListener('input', (event) => {
+        updateFar(event.target.value)
+    })
+
+    slider_input = document.getElementById('sliderLeft')
+    slider_input.addEventListener('input', (event) => {
+        updateLeft(event.target.value)
+    })
+
+    slider_input = document.getElementById('sliderRight')
+    slider_input.addEventListener('input', (event) => {
+        updateRight(event.target.value)
+    })
+
+    slider_input = document.getElementById('sliderTop')
+    slider_input.addEventListener('input', (event) => {
+        updateTop(event.target.value)
+    })
+
+    slider_input = document.getElementById('sliderBottom')
+    slider_input.addEventListener('input', (event) => {
+        updateBottom(event.target.value)
+    })
+
+    // camera translation slider
+    slider_input = document.getElementById('sliderX')
+    slider_input.addEventListener('input', (event) => {
+        updateCameraX(event.target.value)
+    })
+
     g_canvas = document.getElementById('canvas')
 
     // Get the rendering context for WebGL
@@ -73,8 +127,10 @@ async function loadOBJFiles() {
     readObjFile(bottle_data, g_bottleMesh)
 
     cat_data = await fetch('./resources/cat.obj').then(response => response.text()).then((x) => x)
-    g_catMesh = []
-    readObjFile(cat_data, g_catMesh)
+    g_cat1Mesh = []
+    readObjFile(cat_data, g_cat1Mesh)
+    g_cat2Mesh = g_cat1Mesh
+    g_cat3Mesh = g_cat1Mesh
 
     // Wait to load our models before starting to render
     startRendering()
@@ -91,9 +147,11 @@ function startRendering() {
     var gridInfo = buildGridAttributes(1, 1, [0.0, 1.0, 0.0])
     g_gridMesh = gridInfo[0]
 
-    var bottleColors = buildColorAttributes(g_bottleMesh.length / 3)
-    var catColors = buildColorAttributes(g_catMesh.length / 3)
-    var data = g_bottleMesh.concat(g_catMesh).concat(gridInfo[0]).concat(bottleColors).concat(catColors).concat(gridInfo[1])
+    var bottleColors = buildColorAttributes(g_bottleMesh.length / 3, isBottle=true)
+    var cat1Colors = buildColorAttributes(g_cat1Mesh.length / 3, isBottle=false, cat=1)
+    var cat2Colors = buildColorAttributes(g_cat2Mesh.length / 3, isBottle=false, cat=2)
+    var cat3Colors = buildColorAttributes(g_cat3Mesh.length / 3, isBottle=false, cat=3)
+    var data = g_bottleMesh.concat(g_cat1Mesh).concat(g_cat2Mesh).concat(g_cat3Mesh).concat(gridInfo[0]).concat(bottleColors).concat(cat1Colors).concat(cat2Colors).concat(cat3Colors).concat(gridInfo[1])
     
     // load all vertex data into VBO ONCE
     if (!initVBO(new Float32Array(data))) {
@@ -104,13 +162,15 @@ function startRendering() {
     if (!setupVec3('a_Position', 0, 0)) {
         return
     }
-    if (!setupVec3('a_Color', 0, (g_bottleMesh.length + g_catMesh.length + gridInfo[0].length) * FLOAT_SIZE)) {
+    if (!setupVec3('a_Color', 0, (g_bottleMesh.length + g_cat1Mesh.length + g_cat2Mesh.length + g_cat3Mesh.length + gridInfo[0].length) * FLOAT_SIZE)) {
         return -1
     }
 
     // Get references to GLSL uniforms
     g_u_model_ref = gl.getUniformLocation(gl.program, 'u_Model')
     g_u_world_ref = gl.getUniformLocation(gl.program, 'u_World')
+    g_u_camera_ref = gl.getUniformLocation(gl.program, 'u_Camera')
+    g_u_projection_ref = gl.getUniformLocation(gl.program, 'u_Projection')
 
     // ** model matrices ** --> transformation matrices that apply changes to the mesh vertices 
 
@@ -141,12 +201,28 @@ function startRendering() {
     // Reposition our mesh (in this case as an identity operation)
     g_worldMatrix = new Matrix4()
 
+    // default camera position 
+    g_cameraMatrix = new Matrix4()
+
     // Enable culling and depth tests
-    gl.enable(gl.CULL_FACE)
+    gl.disable(gl.CULL_FACE)
     gl.enable(gl.DEPTH_TEST)
+
+    //gl.depthFunc(gl.LEQUAL);
 
     // Setup for ticks
     g_lastFrameMS = Date.now()
+
+    //initialize the projection parameters 
+    updateNear(-1)
+    updateFar(2)
+    updateLeft(-1)
+    updateRight(1)
+    updateBottom(-1)
+    updateTop(1)
+
+    // camera at origin
+    updateCameraX(0)
 
     tick()
 }
@@ -175,6 +251,9 @@ function tick() {
 
 // draw to the screen on the next frame
 function draw() {
+    // Orthographic projection matrix
+    projection_matrix = new Matrix4().setOrtho(g_left, g_right, g_bottom, g_top, g_near, g_far)
+    g_cameraMatrix = new Matrix4().translate(-g_camera_x, 0, 0)
 
     // Clear the canvas with a black background
     gl.clearColor(0.0, 0.0, 0.0, 1.0)
@@ -184,23 +263,24 @@ function draw() {
     // send uniform vars (with the refs) to the VSHADER to transform matrices
     gl.uniformMatrix4fv(g_u_model_ref, false, g_bottle_modelMatrix.elements)
     gl.uniformMatrix4fv(g_u_world_ref, false, g_worldMatrix.elements)
+    gl.uniformMatrix4fv(g_u_camera_ref, false, g_cameraMatrix.elements)
+    gl.uniformMatrix4fv(g_u_projection_ref, false, projection_matrix.elements)
+
     // draw bottle 
     gl.drawArrays(gl.TRIANGLES, 0, (g_bottleMesh.length) / 3) 
-
-
 
     // cat drawing party 
     gl.uniformMatrix4fv(g_u_model_ref, false, g_cat1_modelMatrix.elements)
     gl.uniformMatrix4fv(g_u_world_ref, false, g_worldMatrix.elements)
-    gl.drawArrays(gl.TRIANGLES, (g_bottleMesh.length) / 3, (g_catMesh.length) / 3)
+    gl.drawArrays(gl.TRIANGLES, (g_bottleMesh.length) / 3, (g_cat1Mesh.length) / 3)
 
     gl.uniformMatrix4fv(g_u_model_ref, false, g_cat2_modelMatrix.elements)
     gl.uniformMatrix4fv(g_u_world_ref, false, g_worldMatrix.elements)
-    gl.drawArrays(gl.TRIANGLES, (g_bottleMesh.length) / 3, (g_catMesh.length) / 3)
+    gl.drawArrays(gl.TRIANGLES, (g_bottleMesh.length + g_cat1Mesh.length) / 3, (g_cat2Mesh.length) / 3)
 
     gl.uniformMatrix4fv(g_u_model_ref, false, g_cat3_modelMatrix.elements)
     gl.uniformMatrix4fv(g_u_world_ref, false, g_worldMatrix.elements)
-    gl.drawArrays(gl.TRIANGLES, (g_bottleMesh.length) / 3, (g_catMesh.length) / 3)
+    gl.drawArrays(gl.TRIANGLES, (g_bottleMesh.length + g_cat1Mesh.length + g_cat2Mesh.length) / 3, (g_cat3Mesh.length) / 3)
 
     // the grid has a constant identity matrix for model and world
     // world includes our Y offset
@@ -208,21 +288,78 @@ function draw() {
     gl.uniformMatrix4fv(g_u_world_ref, false, new Matrix4().translate(0, GRID_Y_OFFSET, 0).elements)
 
     // draw the grid
-    gl.drawArrays(gl.LINES, (g_bottleMesh.length + g_catMesh.length) / 3, g_gridMesh.length / 3)
+    gl.drawArrays(gl.LINES, (g_bottleMesh.length + g_cat1Mesh.length + g_cat2Mesh.length + g_cat3Mesh.length) / 3, g_gridMesh.length / 3)
 }
 
 // Helper to construct colors
 // makes every triangle a slightly different shade of blue
-function buildColorAttributes(vertex_count) {
+function buildColorAttributes(vertex_count, isBottle=false, cat=1) {
     var colors = []
     for (var i = 0; i < vertex_count / 3; i++) {
         // three vertices per triangle
         for (var vert = 0; vert < 3; vert++) {
             var shade = (i * 3) / vertex_count
-            colors.push(shade, shade, 1.0)
+            if (isBottle){colors.push(1.0, 0.0, 0.0)} //red bottle 
+            else if (cat == 1) {colors.push(shade, shade, shade)}
+            else if (cat == 2) {
+                let rand = Math.random();
+                if (rand < 0.33) {
+                    colors.push(1.0, 1.0, 1.0); // White
+                } else if (rand < 0.66) {
+                    colors.push(0.1, 0.1, 0.1); // Black
+                } else {
+                    colors.push(1.0, 0.5, 0.2); // Orange
+                }
+            }
+            else {colors.push(0.8 * shade + 0.3, 0.6 * shade + 0.3, 0.4 * shade + 0.2)}
         }
     }
     return colors
+}
+
+// adjusting projection values of ORTHOGRAPHIC CAMERA 
+
+function updateNear(amount) {
+    label = document.getElementById('near')
+    label.textContent = `Near: ${Number(amount).toFixed(2)}`
+    g_near = Number(amount)
+}
+
+function updateFar(amount) {
+    label = document.getElementById('far')
+    label.textContent = `Far: ${Number(amount).toFixed(2)}`
+    g_far = Number(amount)
+}
+
+function updateLeft(amount) {
+    label = document.getElementById('left')
+    label.textContent = `Left: ${Number(amount).toFixed(2)}`
+    g_left = Number(amount)
+}
+
+function updateRight(amount) {
+    label = document.getElementById('right')
+    label.textContent = `Right: ${Number(amount).toFixed(2)}`
+    g_right = Number(amount)
+}
+
+function updateBottom(amount) {
+    label = document.getElementById('bottom')
+    label.textContent = `Bottom: ${Number(amount).toFixed(2)}`
+    g_bottom = Number(amount)
+}
+
+function updateTop(amount) {
+    label = document.getElementById('top')
+    label.textContent = `Top: ${Number(amount).toFixed(2)}`
+    g_top = Number(amount)
+}
+
+// translate camera 
+function updateCameraX(amount) {
+    label = document.getElementById('cameraX')
+    label.textContent = `Camera X: ${Number(amount).toFixed(2)}`
+    g_camera_x = Number(amount)
 }
 
 // How far in the X and Z directions the grid should extend
