@@ -163,7 +163,7 @@ function main() {
  * I made everything sequential for this class to make the logic easier to follow
  */
 async function loadOBJFiles() {
-    // open our OBJ file(s)
+    // open our OBJ file(s) - see citations in comments of OBJ files
     bottle_data = await fetch('./resources/wine2.obj').then(response => response.text()).then((x) => x)
     g_bottleMesh = []
     readObjFile(bottle_data, g_bottleMesh)
@@ -584,3 +584,9 @@ function setupVec3(name, stride, offset) {
 
     return true
 }
+
+// CITATIONS
+// 1. project1starter.HTML, project1starter.js - provided starter HTML and JS code 
+// 2. free3d.com - OBJ file download
+// 3. cgtrader.com - OBJ file download 
+// 4. ChatGPT - randomize calico cat's fur, find shades for cats and heart
