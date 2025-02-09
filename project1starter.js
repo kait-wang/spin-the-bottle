@@ -37,6 +37,10 @@ var g_bottle_modelMatrix
 var g_cat1_modelMatrix
 var g_cat2_modelMatrix
 var g_cat3_modelMatrix
+var g_heart_modelMatrix
+var g_wing1_modelMatrix
+var g_wing2_modelMatrix
+
 var g_worldMatrix
 var g_cameraMatrix
 var projection_matrix
@@ -62,6 +66,9 @@ var g_bottleMesh
 var g_cat1Mesh
 var g_cat2Mesh
 var g_cat3Mesh
+var g_heartMesh
+var g_wing1Mesh
+var g_wing2Mesh
 var g_gridMesh
 
 // We're using triangles, so our vertices each have 3 elements
@@ -160,8 +167,17 @@ async function loadOBJFiles() {
     g_cat2Mesh = g_cat1Mesh
     g_cat3Mesh = g_cat1Mesh
 
+    heart_data = await fetch('./resources/heart.obj').then(response => response.text()).then((x) => x)
+    g_heartMesh = []
+    readObjFile(heart_data, g_heartMesh)
+
+    wing_data = await fetch('./resources/wing.obj').then(response => response.text()).then((x) => x)
+    g_wing1Mesh = []
+    readObjFile(wing_data, g_wing1Mesh)
+    g_wing2Mesh = g_wing1Mesh
+
     // Wait to load our models before starting to render
-    startRendering()
+    startRendering() 
 }
 
 function startRendering() {
@@ -175,11 +191,13 @@ function startRendering() {
     var gridInfo = buildGridAttributes(1, 1, [0.0, 1.0, 0.0])
     g_gridMesh = gridInfo[0]
 
-    var bottleColors = buildColorAttributes(g_bottleMesh.length / 3, isBottle=true)
-    var cat1Colors = buildColorAttributes(g_cat1Mesh.length / 3, isBottle=false, cat=1)
-    var cat2Colors = buildColorAttributes(g_cat2Mesh.length / 3, isBottle=false, cat=2)
-    var cat3Colors = buildColorAttributes(g_cat3Mesh.length / 3, isBottle=false, cat=3)
-    var data = g_bottleMesh.concat(g_cat1Mesh).concat(g_cat2Mesh).concat(g_cat3Mesh).concat(gridInfo[0]).concat(bottleColors).concat(cat1Colors).concat(cat2Colors).concat(cat3Colors).concat(gridInfo[1])
+    var bottleColors = buildColorAttributes(g_bottleMesh.length / 3, isBottle=true, cat=0, isHeart=false)
+    var cat1Colors = buildColorAttributes(g_cat1Mesh.length / 3, isBottle=false, cat=1, isHeart=false)
+    var cat2Colors = buildColorAttributes(g_cat2Mesh.length / 3, isBottle=false, cat=2, isHeart=false)
+    var cat3Colors = buildColorAttributes(g_cat3Mesh.length / 3, isBottle=false, cat=3, isHeart=false)
+    var heartColors = buildColorAttributes(g_heartMesh.length / 3, isBottle=false, cat=0, isHeart=true)
+    var wingColors = buildColorAttributes((g_wing1Mesh.length)*2 / 3, isBottle=false, cat=1, isHeart=false)
+    var data = g_bottleMesh.concat(g_cat1Mesh).concat(g_cat2Mesh).concat(g_cat3Mesh).concat(g_heartMesh).concat(g_wing1Mesh).concat(g_wing2Mesh).concat(gridInfo[0]).concat(bottleColors).concat(cat1Colors).concat(cat2Colors).concat(cat3Colors).concat(heartColors).concat(wingColors).concat(gridInfo[1])
     
     // load all vertex data into VBO ONCE
     if (!initVBO(new Float32Array(data))) {
@@ -190,7 +208,7 @@ function startRendering() {
     if (!setupVec3('a_Position', 0, 0)) {
         return
     }
-    if (!setupVec3('a_Color', 0, (g_bottleMesh.length + g_cat1Mesh.length + g_cat2Mesh.length + g_cat3Mesh.length + gridInfo[0].length) * FLOAT_SIZE)) {
+    if (!setupVec3('a_Color', 0, (g_bottleMesh.length + g_cat1Mesh.length + g_cat2Mesh.length + g_cat3Mesh.length + g_heartMesh.length + g_wing1Mesh.length + g_wing2Mesh.length + gridInfo[0].length) * FLOAT_SIZE)) {
         return -1
     }
 
@@ -226,6 +244,23 @@ function startRendering() {
     g_cat2_modelMatrix.rotate(90, 0, 1, 0) 
     g_cat3_modelMatrix.rotate(-90, 0, 1, 0) 
 
+    // floating heart
+    g_heart_modelMatrix = new Matrix4()
+    g_heart_modelMatrix = g_heart_modelMatrix.setScale(0.012, 0.012, 0.012)
+    g_heart_modelMatrix.translate(0, 40, -110)
+    g_heart_modelMatrix.rotate(-90, 1, 0, 0)
+
+    // hearts on wings
+    g_wing1_modelMatrix = new Matrix4()
+    g_wing1_modelMatrix = g_wing1_modelMatrix.setScale(0.01, 0.01, 0.01)
+    g_wing1_modelMatrix.translate(18, 60, -110)
+    g_wing1_modelMatrix.rotate(-20, 0, 1, 0)
+
+    g_wing2_modelMatrix = new Matrix4()
+    g_wing2_modelMatrix = g_wing2_modelMatrix.setScale(0.01, 0.01, 0.01)
+    g_wing2_modelMatrix.translate(-18, 60, -110)
+    g_wing2_modelMatrix.rotate(160, 0, 1, 0)
+
     // Reposition our mesh (in this case as an identity operation)
     g_worldMatrix = new Matrix4()
 
@@ -235,8 +270,6 @@ function startRendering() {
     // Enable culling and depth tests
     gl.disable(gl.CULL_FACE)
     gl.enable(gl.DEPTH_TEST)
-
-    //gl.depthFunc(gl.LEQUAL);
 
     // Setup for ticks
     g_lastFrameMS = Date.now()
@@ -263,6 +296,11 @@ function startRendering() {
 // extra constants for cleanliness
 var ROTATION_SPEED = .15
 
+// wing flapping animation
+var maxAngle = 15;  
+var flapDirection = 1;    
+var flapAngle = 0; 
+
 // function to apply all the logic for a single frame tick
 function tick() {
     // time since the last frame
@@ -278,6 +316,21 @@ function tick() {
         angle = ROTATION_SPEED * deltaTime
         g_bottle_modelMatrix.concat(new Matrix4().setRotate(angle, 0, 1, 0))
     }
+
+    flapAngle += flapDirection * 0.5;  
+    if (Math.abs(flapAngle) >= maxAngle) {
+        flapDirection *= -1; // wing flaps other way
+    }
+
+    g_wing1_modelMatrix = new Matrix4();
+    g_wing1_modelMatrix.setScale(0.01, 0.01, 0.01);
+    g_wing1_modelMatrix.translate(18, 60, -110);
+    g_wing1_modelMatrix.rotate(-20 - flapAngle, 0, 1, 0);  
+
+    g_wing2_modelMatrix = new Matrix4();
+    g_wing2_modelMatrix.setScale(0.01, 0.01, 0.01);
+    g_wing2_modelMatrix.translate(-18, 60, -110);
+    g_wing2_modelMatrix.rotate(160 - flapAngle, 0, 1, 0); 
     
     draw()
 
@@ -322,18 +375,32 @@ function draw() {
     gl.uniformMatrix4fv(g_u_world_ref, false, g_worldMatrix.elements)
     gl.drawArrays(gl.TRIANGLES, (g_bottleMesh.length + g_cat1Mesh.length + g_cat2Mesh.length) / 3, (g_cat3Mesh.length) / 3)
 
+    // floating heart 
+    gl.uniformMatrix4fv(g_u_model_ref, false, g_heart_modelMatrix.elements)
+    gl.uniformMatrix4fv(g_u_world_ref, false, g_worldMatrix.elements)
+    gl.drawArrays(gl.TRIANGLES, (g_bottleMesh.length + g_cat1Mesh.length + g_cat2Mesh.length + g_cat3Mesh.length) / 3, (g_heartMesh.length) / 3)
+
+    // wings on heart
+    gl.uniformMatrix4fv(g_u_model_ref, false, g_wing1_modelMatrix.elements)
+    gl.uniformMatrix4fv(g_u_world_ref, false, g_worldMatrix.elements)
+    gl.drawArrays(gl.TRIANGLES, (g_bottleMesh.length + g_cat1Mesh.length + g_cat2Mesh.length + g_cat3Mesh.length + g_heartMesh.length) / 3, g_wing1Mesh.length / 3)
+
+    gl.uniformMatrix4fv(g_u_model_ref, false, g_wing2_modelMatrix.elements)
+    gl.uniformMatrix4fv(g_u_world_ref, false, g_worldMatrix.elements)
+    gl.drawArrays(gl.TRIANGLES, (g_bottleMesh.length + g_cat1Mesh.length + g_cat2Mesh.length + g_cat3Mesh.length + g_heartMesh.length + g_wing1Mesh.length) / 3, g_wing2Mesh.length / 3)
+
     // the grid has a constant identity matrix for model and world
     // world includes our Y offset
     gl.uniformMatrix4fv(g_u_model_ref, false, new Matrix4().elements)
     gl.uniformMatrix4fv(g_u_world_ref, false, new Matrix4().translate(0, GRID_Y_OFFSET, 0).elements)
 
     // draw the grid
-    gl.drawArrays(gl.LINES, (g_bottleMesh.length + g_cat1Mesh.length + g_cat2Mesh.length + g_cat3Mesh.length) / 3, g_gridMesh.length / 3)
+    gl.drawArrays(gl.LINES, (g_bottleMesh.length + g_cat1Mesh.length + g_cat2Mesh.length + g_cat3Mesh.length + g_heartMesh.length + g_wing1Mesh.length + g_wing2Mesh.length) / 3, g_gridMesh.length / 3)
 }
 
 // Helper to construct colors
 // makes every triangle a slightly different shade of blue
-function buildColorAttributes(vertex_count, isBottle=false, cat=1) {
+function buildColorAttributes(vertex_count, isBottle=false, cat=0, isHeart=false) {
     var colors = []
     for (var i = 0; i < vertex_count / 3; i++) {
         // three vertices per triangle
@@ -351,7 +418,8 @@ function buildColorAttributes(vertex_count, isBottle=false, cat=1) {
                     colors.push(1.0, 0.5, 0.2); // Orange
                 }
             }
-            else {colors.push(0.8 * shade + 0.3, 0.6 * shade + 0.3, 0.4 * shade + 0.2)}
+            else if (cat == 3) {colors.push(0.8 * shade + 0.3, 0.6 * shade + 0.3, 0.4 * shade + 0.2)}
+            else if (isHeart) {colors.push(0.7, 0.1 * (1 - shade) + 0.05, 0.3 * shade + 0.2)}
         }
     }
     return colors
