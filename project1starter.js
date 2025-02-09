@@ -60,6 +60,7 @@ var g_top
 var g_bottom
 
 var g_camera_x // slider translation 
+var g_heart_y // heart translation 
 
 // Mesh definitions
 var g_bottleMesh
@@ -124,6 +125,12 @@ function main() {
     slider_input = document.getElementById('sliderX')
     slider_input.addEventListener('input', (event) => {
         updateCameraX(event.target.value)
+    })
+
+    // heart position slider 
+    slider_input = document.getElementById('sliderHeart')
+    slider_input.addEventListener('input', (event) => {
+        updateHeartY(event.target.value)
     })
 
     // switching camera 
@@ -223,7 +230,7 @@ function startRendering() {
     // Setup our model by scaling
     g_bottle_modelMatrix = new Matrix4() //starts as an identity matrix 
     g_bottle_modelMatrix = g_bottle_modelMatrix.setScale(0.012, 0.012, 0.012)
-    g_bottle_modelMatrix.translate(0, -10, -110)
+    g_bottle_modelMatrix.translate(0, -20, -110)
 
     // I want each cat to be its own model matrix
     g_cat1_modelMatrix = new Matrix4()
@@ -236,9 +243,9 @@ function startRendering() {
     g_cat3_modelMatrix = g_cat3_modelMatrix.setScale(0.012, 0.012, 0.012)
 
     // circle the cats around the spinning bottle 
-    g_cat1_modelMatrix.translate(0, -10, -140)  
-    g_cat2_modelMatrix.translate(-55, -10, -90) 
-    g_cat3_modelMatrix.translate(55, -10, -90)
+    g_cat1_modelMatrix.translate(0, -20, -140)  
+    g_cat2_modelMatrix.translate(-55, -20, -90) 
+    g_cat3_modelMatrix.translate(55, -20, -90)
 
     g_cat1_modelMatrix.rotate(0, 0, 1, 0)
     g_cat2_modelMatrix.rotate(90, 0, 1, 0) 
@@ -247,18 +254,18 @@ function startRendering() {
     // floating heart
     g_heart_modelMatrix = new Matrix4()
     g_heart_modelMatrix = g_heart_modelMatrix.setScale(0.012, 0.012, 0.012)
-    g_heart_modelMatrix.translate(0, 40, -110)
+    g_heart_modelMatrix.translate(0, 30, -90)
     g_heart_modelMatrix.rotate(-90, 1, 0, 0)
 
     // hearts on wings
     g_wing1_modelMatrix = new Matrix4()
     g_wing1_modelMatrix = g_wing1_modelMatrix.setScale(0.01, 0.01, 0.01)
-    g_wing1_modelMatrix.translate(18, 60, -110)
+    g_wing1_modelMatrix.translate(17, 50, -105)
     g_wing1_modelMatrix.rotate(-20, 0, 1, 0)
 
     g_wing2_modelMatrix = new Matrix4()
     g_wing2_modelMatrix = g_wing2_modelMatrix.setScale(0.01, 0.01, 0.01)
-    g_wing2_modelMatrix.translate(-18, 60, -110)
+    g_wing2_modelMatrix.translate(-17, 50, -105)
     g_wing2_modelMatrix.rotate(160, 0, 1, 0)
 
     // Reposition our mesh (in this case as an identity operation)
@@ -284,11 +291,14 @@ function startRendering() {
     updateBottom(-1)
     updateTop(1)
 
-    updateNear(1)
+    updateNear(0.8)
     updateFar(4)
 
     // camera at origin
     updateCameraX(0)
+
+    // default heart height
+    updateHeartY(50)
 
     tick()
 }
@@ -297,7 +307,7 @@ function startRendering() {
 var ROTATION_SPEED = .15
 
 // wing flapping animation
-var maxAngle = 15;  
+var maxAngle = 25;  
 var flapDirection = 1;    
 var flapAngle = 0; 
 
@@ -322,15 +332,21 @@ function tick() {
         flapDirection *= -1; // wing flaps other way
     }
 
+    // current heart height 
+    g_heart_modelMatrix = new Matrix4()
+    g_heart_modelMatrix = g_heart_modelMatrix.setScale(0.012, 0.012, 0.012)
+    g_heart_modelMatrix.translate(0, g_heart_y-20, -90)
+    g_heart_modelMatrix.rotate(-90, 1, 0, 0)
+    
     g_wing1_modelMatrix = new Matrix4();
     g_wing1_modelMatrix.setScale(0.01, 0.01, 0.01);
-    g_wing1_modelMatrix.translate(18, 60, -110);
+    g_wing1_modelMatrix.translate(17, g_heart_y, -105);
     g_wing1_modelMatrix.rotate(-20 - flapAngle, 0, 1, 0);  
-
+    
     g_wing2_modelMatrix = new Matrix4();
     g_wing2_modelMatrix.setScale(0.01, 0.01, 0.01);
-    g_wing2_modelMatrix.translate(-18, 60, -110);
-    g_wing2_modelMatrix.rotate(160 - flapAngle, 0, 1, 0); 
+    g_wing2_modelMatrix.translate(-17, g_heart_y, -105);
+    g_wing2_modelMatrix.rotate(-(160 - flapAngle), 0, 1, 0); 
     
     draw()
 
@@ -481,6 +497,13 @@ function updateCameraX(amount) {
     label = document.getElementById('cameraX')
     label.textContent = `Camera X: ${Number(amount).toFixed(2)}`
     g_camera_x = Number(amount)
+}
+
+//translate heart
+function updateHeartY(amount) {
+    label = document.getElementById('heartY')
+    label.textContent = `Heart height: ${Number(amount).toFixed(2)}`
+    g_heart_y = Number(amount)
 }
 
 // How far in the X and Z directions the grid should extend
